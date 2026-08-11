@@ -1,0 +1,14 @@
+C:\Users\Clarence\C# Proj\TradingAutomationHub\obj\Debug\net8.0-windows\TradingAutomationHub.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Clarence\C# Proj\TradingAutomationHub\obj\Debug\net8.0-windows\TradingAutomationHub.AssemblyInfoInputs.cache
+C:\Users\Clarence\C# Proj\TradingAutomationHub\obj\Debug\net8.0-windows\TradingAutomationHub.AssemblyInfo.cs
+C:\Users\Clarence\C# Proj\TradingAutomationHub\obj\Debug\net8.0-windows\TradingAutomationHub.csproj.CoreCompileInputs.cache
+C:\Users\Clarence\C# Proj\TradingAutomationHub\bin\Debug\net8.0-windows\TradingAutomationHub.exe
+C:\Users\Clarence\C# Proj\TradingAutomationHub\bin\Debug\net8.0-windows\TradingAutomationHub.deps.json
+C:\Users\Clarence\C# Proj\TradingAutomationHub\bin\Debug\net8.0-windows\TradingAutomationHub.runtimeconfig.json
+C:\Users\Clarence\C# Proj\TradingAutomationHub\bin\Debug\net8.0-windows\TradingAutomationHub.dll
+C:\Users\Clarence\C# Proj\TradingAutomationHub\bin\Debug\net8.0-windows\TradingAutomationHub.pdb
+C:\Users\Clarence\C# Proj\TradingAutomationHub\obj\Debug\net8.0-windows\TradingAutomationHub.dll
+C:\Users\Clarence\C# Proj\TradingAutomationHub\obj\Debug\net8.0-windows\refint\TradingAutomationHub.dll
+C:\Users\Clarence\C# Proj\TradingAutomationHub\obj\Debug\net8.0-windows\TradingAutomationHub.pdb
+C:\Users\Clarence\C# Proj\TradingAutomationHub\obj\Debug\net8.0-windows\TradingAutomationHub.genruntimeconfig.cache
+C:\Users\Clarence\C# Proj\TradingAutomationHub\obj\Debug\net8.0-windows\ref\TradingAutomationHub.dll

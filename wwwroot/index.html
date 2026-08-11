@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Real-time market analysis and trading signal dashboard.">
+  <title>Trading Intelligence</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#" aria-label="Trading Intelligence home">
+        <span class="brand-mark" aria-hidden="true">TI</span>
+        <span><strong>Trading</strong><small>Intelligence</small></span>
+      </a>
+      <nav aria-label="Primary navigation">
+        <a class="nav-item active" data-view="live-view" href="#live"><span>Live signals</span><span class="live-dot"></span></a>
+        <a class="nav-item" data-view="history-view" href="#history">Signal history</a>
+        <a class="nav-item" data-view="performance-view" href="#performance">Performance</a>
+        <a class="nav-item" data-view="backtesting-view" href="#backtesting">Backtesting</a>
+        <a class="nav-item" data-view="settings-view" href="#settings">Settings</a>
+      </nav>
+      <div class="sidebar-note">
+        <span>Analysis only</span>
+        <p>No real-money trades are executed.</p>
+      </div>
+    </aside>
+
+    <div class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Market overview</p>
+          <h1>Live signals</h1>
+          <p class="subtitle">Real-time technical advisories for crypto, forex, and precious metals.</p>
+        </div>
+        <div class="topbar-actions">
+          <button id="themeToggle" class="theme-toggle" type="button" aria-label="Switch to light mode"><span aria-hidden="true">L</span><span class="theme-label">Light</span></button>
+          <div id="connectionStatus" class="connection-pill connecting" role="status">
+            <span class="status-dot"></span><span>Connecting</span>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <div id="live-view" class="app-view active-view">
+        <section class="metrics" aria-label="Signal summary">
+          <article class="metric"><span>Tracked markets</span><strong id="trackedCount">—</strong><small>Active symbols</small></article>
+          <article class="metric buy"><span>Buy signals</span><strong id="buyCount">—</strong><small>Bullish advisories</small></article>
+          <article class="metric sell"><span>Sell signals</span><strong id="sellCount">—</strong><small>Bearish advisories</small></article>
+          <article class="metric hold"><span>Hold signals</span><strong id="holdCount">—</strong><small>Neutral advisories</small></article>
+        </section>
+
+        <section id="live" class="panel">
+          <div class="panel-heading">
+            <div><p class="section-kicker">Current market state</p><h2>Live advisories</h2></div>
+            <form id="addSymbolForm" class="symbol-form">
+              <label class="sr-only" for="addSymbolInput">Binance symbol</label>
+              <input id="addSymbolInput" maxlength="20" autocomplete="off" placeholder="BTCUSDT, EURUSD, XAUUSD">
+              <button id="addSymbolBtn" type="submit">Add market</button>
+            </form>
+          </div>
+          <div id="addSymbolMsg" class="form-message" role="status"></div>
+          <div id="advisoryGrid" class="advisory-grid" aria-live="polite">
+            <div class="empty-state">Waiting for live market data…</div>
+          </div>
+        </section>
+
+        </div>
+
+        <div id="history-view" class="app-view">
+        <section id="history" class="panel">
+          <div class="panel-heading">
+            <div><p class="section-kicker">Audit trail</p><h2>Signal history</h2></div>
+            <span class="panel-meta">Signal changes only</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Time</th><th>Market</th><th>Price</th><th>Signal</th><th>Confidence</th><th>Rationale</th></tr></thead>
+              <tbody id="historyTable"><tr><td colspan="6" class="table-empty">Waiting for signal history…</td></tr></tbody>
+            </table>
+          </div>
+        </section></div>
+
+        <div id="performance-view" class="app-view">
+          <section id="performance" class="panel">
+            <div class="panel-heading"><div><p class="section-kicker">Observed signal activity</p><h2>Performance overview</h2></div><span class="panel-meta">Current session</span></div>
+            <div class="performance-grid">
+              <article class="insight-card"><span>Recorded changes</span><strong id="performanceTotal">0</strong><small>Distinct advisory changes</small></article>
+              <article class="insight-card"><span>Directional signals</span><strong id="performanceDirectional">0</strong><small>Buy and sell advisories</small></article>
+              <article class="insight-card"><span>Average confidence</span><strong id="performanceConfidence">0%</strong><small>Transparent technical confidence</small></article>
+            </div>
+            <div class="notice"><strong>Outcome tracking is not active yet.</strong><p>Win rate, profit factor and R-multiples require stored entry, stop-loss and take-profit outcomes. This page deliberately does not invent those results.</p></div>
+            <div class="subsection"><h3>Signals by market</h3><div id="marketPerformance" class="market-breakdown"><p class="muted-copy">Signal activity will appear after the first advisory changes.</p></div></div>
+          </section>
+        </div>
+
+        <div id="backtesting-view" class="app-view">
+          <section id="backtesting" class="panel">
+            <div class="panel-heading"><div><p class="section-kicker">Historical validation</p><h2>Backtesting workspace</h2></div><span class="readiness-badge">Architecture pending</span></div>
+            <div class="two-column">
+              <div><h3>Test configuration</h3><div class="form-grid"><label>Market<input value="BTCUSDT" disabled></label><label>Timeframe<select disabled><option>15 minutes</option></select></label><label>Start date<input type="date" disabled></label><label>End date<input type="date" disabled></label></div><button class="secondary-button" disabled>Run backtest</button></div>
+              <div class="explain-card"><h3>Why this is locked</h3><p>A trustworthy backtest must use candle data and the same scoring strategy as live analysis without seeing future candles. The current live engine still uses polled-price SMA samples.</p><p>The Binance candle provider is ready, but the candle indicator and shared strategy phases must be completed before enabling results.</p></div>
+            </div>
+          </section>
+        </div>
+
+        <div id="settings-view" class="app-view">
+          <section id="settings" class="panel">
+            <div class="panel-heading"><div><p class="section-kicker">Platform preferences</p><h2>Settings</h2></div><span id="settingsSaved" class="panel-meta"></span></div>
+            <div class="settings-list">
+              <div class="setting-row"><div><strong>Appearance</strong><p>Choose the dashboard color theme.</p></div><select id="themeSelect"><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></select></div>
+              <div class="setting-row"><div><strong>History refresh</strong><p>How often the browser refreshes signal history.</p></div><select id="refreshSelect"><option value="5000">Every 5 seconds</option><option value="10000">Every 10 seconds</option><option value="30000">Every 30 seconds</option></select></div>
+              <div class="setting-row"><div><strong>Market-data providers</strong><p>Symbols are automatically routed to the appropriate provider.</p></div><span class="value-pill">Binance + Twelve Data</span></div>
+              <div class="setting-row"><div><strong>Execution mode</strong><p>The platform generates analysis only and never places live orders.</p></div><span class="value-pill safe">Analysis only</span></div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "Files": [
+    {
+      "Id": "C:\\Users\\Clarence\\C# Proj\\TradingAutomationHub\\wwwroot\\app.js",
+      "PackagePath": "staticwebassets\\app.js"
+    },
+    {
+      "Id": "C:\\Users\\Clarence\\C# Proj\\TradingAutomationHub\\wwwroot\\index.html",
+      "PackagePath": "staticwebassets\\index.html"
+    },
+    {
+      "Id": "C:\\Users\\Clarence\\C# Proj\\TradingAutomationHub\\wwwroot\\style.css",
+      "PackagePath": "staticwebassets\\style.css"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.TradingAutomationHub.Microsoft.AspNetCore.StaticWebAssets.props",
+      "PackagePath": "build\\Microsoft.AspNetCore.StaticWebAssets.props"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.build.TradingAutomationHub.props",
+      "PackagePath": "build\\TradingAutomationHub.props"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.buildMultiTargeting.TradingAutomationHub.props",
+      "PackagePath": "buildMultiTargeting\\TradingAutomationHub.props"
+    },
+    {
+      "Id": "obj\\Release\\net8.0\\staticwebassets\\msbuild.buildTransitive.TradingAutomationHub.props",
+      "PackagePath": "buildTransitive\\TradingAutomationHub.props"
+    }
+  ],
+  "ElementsToRemove": []
+}

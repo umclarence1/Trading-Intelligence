@@ -1,0 +1,77 @@
+{
+  "Version": 1,
+  "Hash": "TxYUFkxbP4FOD1ucK/eJt7ljqTbuhstrNWttD5Gwv9c=",
+  "Source": "TradingAutomationHub",
+  "BasePath": "_content/TradingAutomationHub",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [
+    {
+      "Name": "TradingAutomationHub\\wwwroot",
+      "Source": "TradingAutomationHub",
+      "ContentRoot": "C:\\Users\\Clarence\\C# Proj\\TradingAutomationHub\\wwwroot\\",
+      "BasePath": "_content/TradingAutomationHub",
+      "Pattern": "**"
+    }
+  ],
+  "Assets": [
+    {
+      "Identity": "C:\\Users\\Clarence\\C# Proj\\TradingAutomationHub\\wwwroot\\app.js",
+      "SourceId": "TradingAutomationHub",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\Clarence\\C# Proj\\TradingAutomationHub\\wwwroot\\",
+      "BasePath": "_content/TradingAutomationHub",
+      "RelativePath": "app.js",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\app.js"
+    },
+    {
+      "Identity": "C:\\Users\\Clarence\\C# Proj\\TradingAutomationHub\\wwwroot\\index.html",
+      "SourceId": "TradingAutomationHub",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\Clarence\\C# Proj\\TradingAutomationHub\\wwwroot\\",
+      "BasePath": "_content/TradingAutomationHub",
+      "RelativePath": "index.html",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\index.html"
+    },
+    {
+      "Identity": "C:\\Users\\Clarence\\C# Proj\\TradingAutomationHub\\wwwroot\\style.css",
+      "SourceId": "TradingAutomationHub",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\Clarence\\C# Proj\\TradingAutomationHub\\wwwroot\\",
+      "BasePath": "_content/TradingAutomationHub",
+      "RelativePath": "style.css",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\style.css"
+    }
+  ]
+}
