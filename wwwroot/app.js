@@ -67,7 +67,16 @@ function createAdvisoryCard(item) {
     <div class="chart-wrap"><canvas id="spark-${safeId(item.symbol)}"></canvas></div>
     <div class="signal-row"><span class="signal-badge ${signalClass}"></span><span class="confidence"><strong></strong> confidence</span></div>
     <p class="reason"></p>
+    <div class="risk-grid">
+      <div><span>Entry</span><strong class="entry-price"></strong></div>
+      <div><span>SL</span><strong class="stop-loss"></strong></div>
+      <div><span>TP1</span><strong class="take-profit1"></strong></div>
+      <div><span>TP2</span><strong class="take-profit2"></strong></div>
+    </div>
     <div class="data-line"><span class="data-status ${statusClass}"></span><time></time></div>`;
+
+  const confidenceValue = item.confidence != null ? Number(item.confidence) : Number(item.technicalConfidence || 0);
+  const formattedConfidence = Number.isFinite(confidenceValue) ? `${Math.round(confidenceValue * 100)}%` : '0%';
 
   card.querySelector('.symbol-name').textContent = item.symbol;
   card.querySelector('.provider').textContent = item.provider || 'Market provider';
@@ -76,8 +85,12 @@ function createAdvisoryCard(item) {
   remove.setAttribute('aria-label', `Remove ${item.symbol}`);
   card.querySelector('.price').textContent = isLive ? formatPrice(item.price) : 'Awaiting data';
   card.querySelector('.signal-badge').textContent = item.signal;
-  card.querySelector('.confidence strong').textContent = `${Math.round(Number(item.confidence) * 100)}%`;
+  card.querySelector('.confidence strong').textContent = formattedConfidence;
   card.querySelector('.reason').textContent = item.reason;
+  card.querySelector('.entry-price').textContent = item.entryPrice != null ? formatPrice(item.entryPrice) : '—';
+  card.querySelector('.stop-loss').textContent = item.stopLoss != null ? formatPrice(item.stopLoss) : '—';
+  card.querySelector('.take-profit1').textContent = item.takeProfit1 != null ? formatPrice(item.takeProfit1) : '—';
+  card.querySelector('.take-profit2').textContent = item.takeProfit2 != null ? formatPrice(item.takeProfit2) : '—';
   card.querySelector('.data-status').textContent = item.statusMessage || item.status;
   card.querySelector('time').textContent = new Date(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   return card;

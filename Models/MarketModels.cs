@@ -29,12 +29,28 @@ public sealed record SymbolAdvisory(
     DateTime Time,
     string Provider,
     MarketDataStatus Status,
-    string StatusMessage);
+    string StatusMessage,
+    SignalDirection Direction = SignalDirection.Hold,
+    int TechnicalScore = 0,
+    decimal TechnicalConfidence = 0m,
+    decimal? EntryPrice = null,
+    decimal? StopLoss = null,
+    decimal? TakeProfit1 = null,
+    decimal? TakeProfit2 = null,
+    string? RiskRewardTP1 = null,
+    string? RiskRewardTP2 = null,
+    decimal? Ema20 = null,
+    decimal? Ema50 = null,
+    decimal? Rsi14 = null,
+    decimal? Atr14 = null,
+    DateTime? CandleCloseTime = null,
+    IReadOnlyList<string>? Reasons = null);
 
 public sealed record SignalRecord(
     string Symbol,
     decimal Price,
     TradeSignal Signal,
+    SignalDirection Direction,
     string Reason,
     decimal Confidence,
     DateTime Time);

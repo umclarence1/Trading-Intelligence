@@ -1,4 +1,8 @@
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using TradingAutomationHub.Indicators;
+using TradingAutomationHub.Enums;
 using TradingAutomationHub.MarketData;
 using TradingAutomationHub.Models;
 using TradingAutomationHub.Trading;
@@ -20,6 +24,9 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
     private const int PriceHistorySize = 120;
     private readonly IMarketDataProvider _marketDataProvider;
     private readonly ILogger<TradingAdvisoryService> _logger;
+    private readonly IIndicatorEngine _indicatorEngine;
+    private readonly RiskManagementEngine _riskManagement;
+    private readonly TradingSettings _settings;
     private readonly ConcurrentDictionary<string, SymbolAdvisory> _advisories = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _symbolTokens = new();
     private readonly ConcurrentDictionary<string, Queue<decimal>> _priceHistory = new();
@@ -29,10 +36,16 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
 
     public TradingAdvisoryService(
         IMarketDataProvider marketDataProvider,
-        ILogger<TradingAdvisoryService> logger)
+        ILogger<TradingAdvisoryService> logger,
+        IIndicatorEngine indicatorEngine,
+        RiskManagementEngine riskManagement,
+        TradingSettings settings)
     {
         _marketDataProvider = marketDataProvider;
         _logger = logger;
+        _indicatorEngine = indicatorEngine;
+        _riskManagement = riskManagement;
+        _settings = settings;
     }
 
     public IReadOnlyList<SymbolAdvisory> Advisories =>
@@ -94,8 +107,10 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
 
     private async Task RunSymbolAsync(string symbol, CancellationToken cancellationToken)
     {
-        var engine = new TradingEngine();
+        var engine = new TradingEngine(_indicatorEngine, _riskManagement, _settings);
         var retryDelay = TimeSpan.FromSeconds(3);
+        TimeSpan timeframeDuration = _settings.PrimaryTimeframeEnum.Duration();
+        DateTime? lastEvaluatedClose = null;
 
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -106,21 +121,15 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
                     TimeSpan.FromSeconds(1),
                     cancellationToken))
                 {
-                    engine.OnTick(tick);
-                    var advisory = new SymbolAdvisory(
-                        tick.Symbol,
-                        tick.Price,
-                        engine.CurrentSignal,
-                        engine.Position,
-                        engine.Reason,
-                        engine.Confidence,
-                        tick.Time,
-                        _marketDataProvider.GetProviderName(tick.Symbol),
-                        MarketDataStatus.Live,
-                        "Live market data");
-                    _advisories[tick.Symbol] = advisory;
                     AddPrice(tick.Symbol, tick.Price);
-                    RecordSignalChange(advisory);
+                    UpdateLivePrice(tick);
+
+                    var closedCandleClose = GetCurrentClosedCandleClose(tick.Time, timeframeDuration);
+                    if (lastEvaluatedClose is null || closedCandleClose > lastEvaluatedClose)
+                    {
+                        lastEvaluatedClose = closedCandleClose;
+                        await EvaluateAdvisoryForClosedCandle(symbol, tick.Time, cancellationToken, engine);
+                    }
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -159,19 +168,114 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
         }
     }
 
+    private void UpdateLivePrice(MarketTick tick)
+    {
+        if (!_advisories.TryGetValue(tick.Symbol, out var existing))
+            existing = WaitingAdvisory(tick.Symbol);
+
+        var updated = existing with
+        {
+            Price = tick.Price,
+            Time = tick.Time,
+            Status = MarketDataStatus.Live,
+            StatusMessage = "Live market data"
+        };
+
+        _advisories[tick.Symbol] = updated;
+    }
+
+    private async Task EvaluateAdvisoryForClosedCandle(string symbol, DateTime now, CancellationToken cancellationToken, TradingEngine engine)
+    {
+        var timeframe = _settings.PrimaryTimeframeEnum;
+        var closedCandleTime = TruncateToCandleClose(now, timeframe.Duration());
+        var candleLimit = Math.Max(_settings.SlowEmaPeriod, _settings.AtrPeriod) + 50;
+        var candles = await _marketDataProvider.GetCandlesAsync(symbol, timeframe, candleLimit, cancellationToken);
+        var evaluation = engine.EvaluateClosedCandles(candles, timeframe);
+
+        if (!_advisories.TryGetValue(symbol, out var previousAdvisory))
+            previousAdvisory = WaitingAdvisory(symbol);
+
+        var signal = evaluation.Direction switch
+        {
+            SignalDirection.StrongBuy => TradeSignal.Buy,
+            SignalDirection.Buy => TradeSignal.Buy,
+            SignalDirection.StrongSell => TradeSignal.Sell,
+            SignalDirection.Sell => TradeSignal.Sell,
+            _ => TradeSignal.Hold
+        };
+
+        var riskPlan = evaluation.Direction is SignalDirection.Buy or SignalDirection.StrongBuy or SignalDirection.Sell or SignalDirection.StrongSell
+            ? _riskManagement.BuildRiskPlan(evaluation.ClosePrice, evaluation.Atr14 ?? 0m, evaluation.Direction)
+            : RiskPlan.Empty;
+
+        var advisory = previousAdvisory with
+        {
+            Signal = signal,
+            Direction = evaluation.Direction,
+            Confidence = evaluation.Confidence,
+            TechnicalScore = evaluation.Score,
+            TechnicalConfidence = evaluation.Confidence,
+            Reason = string.Join(" ", evaluation.Reasons),
+            Reasons = evaluation.Reasons,
+            Ema20 = evaluation.Ema20,
+            Ema50 = evaluation.Ema50,
+            Rsi14 = evaluation.Rsi14,
+            Atr14 = evaluation.Atr14,
+            CandleCloseTime = closedCandleTime,
+            EntryPrice = riskPlan.Entry,
+            StopLoss = riskPlan.StopLoss,
+            TakeProfit1 = riskPlan.TakeProfit1,
+            TakeProfit2 = riskPlan.TakeProfit2,
+            RiskRewardTP1 = riskPlan.TakeProfit1RiskReward,
+            RiskRewardTP2 = riskPlan.TakeProfit2RiskReward,
+            Status = evaluation.DataStatus switch
+            {
+                AdvisoryStatus.Ready => MarketDataStatus.Live,
+                AdvisoryStatus.InsufficientHistory => MarketDataStatus.Waiting,
+                AdvisoryStatus.Loading => MarketDataStatus.Waiting,
+                AdvisoryStatus.ProviderUnavailable => MarketDataStatus.ProviderUnavailable,
+                AdvisoryStatus.InvalidSymbol => MarketDataStatus.InvalidSymbol,
+                AdvisoryStatus.Error => MarketDataStatus.ProviderUnavailable,
+                _ => MarketDataStatus.Waiting
+            },
+            StatusMessage = evaluation.DataStatus == AdvisoryStatus.Ready
+                ? "Ready"
+                : evaluation.Reasons.FirstOrDefault() ?? evaluation.DataStatus.ToString(),
+            Time = now
+        };
+
+        _advisories[symbol] = advisory;
+        RecordSignalChange(advisory);
+    }
+
+    private static DateTime GetCurrentClosedCandleClose(DateTime time, TimeSpan timeframe)
+    {
+        var elapsed = time - DateTime.UnixEpoch;
+        var periods = (long)(elapsed.Ticks / timeframe.Ticks);
+        return DateTime.UnixEpoch.AddTicks((periods * timeframe.Ticks) + timeframe.Ticks);
+    }
+
+    private static DateTime TruncateToCandleClose(DateTime time, TimeSpan timeframe)
+    {
+        var elapsed = time - DateTime.UnixEpoch;
+        var periods = (long)(elapsed.Ticks / timeframe.Ticks);
+        return DateTime.UnixEpoch.AddTicks(periods * timeframe.Ticks + timeframe.Ticks);
+    }
+
     private void RecordSignalChange(SymbolAdvisory advisory)
     {
         lock (_historyLock)
         {
             var previous = _history.LastOrDefault(r => r.Symbol == advisory.Symbol);
-            if (previous?.Signal == advisory.Signal && previous.Reason == advisory.Reason) return;
+            if (previous?.Signal == advisory.Signal && previous?.Direction == advisory.Direction && previous?.Reason == advisory.Reason) return;
 
             _history.Add(new SignalRecord(
                 advisory.Symbol,
                 advisory.Price,
                 advisory.Signal,
+                advisory.Direction,
                 advisory.Reason,
-                advisory.Confidence,
+                advisory.TechnicalConfidence,
                 advisory.Time));
             if (_history.Count > 200) _history.RemoveAt(0);
         }

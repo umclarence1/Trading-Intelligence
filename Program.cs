@@ -2,11 +2,14 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Options;
+using TradingAutomationHub;
 using TradingAutomationHub.MarketData;
 using TradingAutomationHub.Models;
 using TradingAutomationHub.Services;
 using TradingAutomationHub.Enums;
 using TradingAutomationHub.Indicators;
+using TradingAutomationHub.Trading;
 
 var initialSymbols = new[] { "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "ADAUSDT" };
 
@@ -16,6 +19,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
 builder.Services.Configure<TwelveDataSettings>(builder.Configuration.GetSection(TwelveDataSettings.SectionName));
+builder.Services.Configure<TradingSettings>(builder.Configuration.GetSection(TradingSettings.SectionName));
+builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<TradingSettings>>().Value);
+builder.Services.AddSingleton<RiskManagementEngine>();
 builder.Services.AddHttpClient<BinanceMarketDataProvider>(client =>
 {
     client.BaseAddress = new Uri("https://api.binance.com");
@@ -196,6 +202,12 @@ static class AdvisoryResponseExtensions
         provider = advisory.Provider,
         status = advisory.Status.ToString(),
         statusMessage = advisory.StatusMessage,
+        entryPrice = advisory.EntryPrice,
+        stopLoss = advisory.StopLoss,
+        takeProfit1 = advisory.TakeProfit1,
+        takeProfit2 = advisory.TakeProfit2,
+        riskRewardTP1 = advisory.RiskRewardTP1,
+        riskRewardTP2 = advisory.RiskRewardTP2,
         prices
     };
 }

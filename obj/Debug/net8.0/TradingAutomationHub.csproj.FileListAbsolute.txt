@@ -28,3 +28,4 @@ C:\Users\Clarence\C# Proj\TradingAutomationHub\.verify\bin\TradingAutomationHub.
 C:\Users\Clarence\C# Proj\TradingAutomationHub\.verify\bin\TradingAutomationHub.dll
 C:\Users\Clarence\C# Proj\TradingAutomationHub\.verify\bin\TradingAutomationHub.pdb
 C:\Users\Clarence\C# Proj\TradingAutomationHub\bin\Debug\net8.0\appsettings.json
+C:\Users\Clarence\C# Proj\TradingAutomationHub\obj\Debug\net8.0\TradingAutomationHub.sourcelink.json

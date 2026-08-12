@@ -21,10 +21,7 @@
         <a class="nav-item" data-view="backtesting-view" href="#backtesting">Backtesting</a>
         <a class="nav-item" data-view="settings-view" href="#settings">Settings</a>
       </nav>
-      <div class="sidebar-note">
-        <span>Analysis only</span>
-        <p>No real-money trades are executed.</p>
-      </div>
+      
     </aside>
 
     <div class="workspace">
@@ -120,5 +117,10 @@
     </div>
   </div>
   <script src="app.js" defer></script>
+  <script>
+    // Optional: set your deployed backend URL here (no trailing slash).
+    // Example: window.__BACKEND_URL__ = "https://tradinghub.yourdomain.com";
+    window.__BACKEND_URL__ = window.__BACKEND_URL__ || "";
+  </script>
 </body>
 </html>
