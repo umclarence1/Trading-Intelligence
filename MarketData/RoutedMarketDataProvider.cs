@@ -36,7 +36,23 @@ public sealed class RoutedMarketDataProvider : IMarketDataProvider
         var stream = Select(symbol) == ProviderKind.Forex
             ? _forex.GetTicksAsync(symbol, interval, cancellationToken)
             : _binance.GetTicksAsync(symbol, interval, cancellationToken);
-        await foreach (var tick in stream.WithCancellation(cancellationToken)) yield return tick;
+
+        try
+        {
+            await foreach (var tick in stream.WithCancellation(cancellationToken))
+                yield return tick;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            yield break;
+        }
+        catch (Exception)
+        {
+            // Provider-level errors (network, 4xx/5xx) are handled by the underlying provider
+            // but ensure they don't crash the routing loop. Downstream code will observe
+            // that no ticks arrive and log an appropriate warning.
+            yield break;
+        }
     }
 
     private static ProviderKind Select(string symbol) =>
