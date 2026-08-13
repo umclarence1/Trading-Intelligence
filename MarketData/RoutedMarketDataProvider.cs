@@ -37,21 +37,33 @@ public sealed class RoutedMarketDataProvider : IMarketDataProvider
             ? _forex.GetTicksAsync(symbol, interval, cancellationToken)
             : _binance.GetTicksAsync(symbol, interval, cancellationToken);
 
+        var enumerator = stream.GetAsyncEnumerator(cancellationToken);
         try
         {
-            await foreach (var tick in stream.WithCancellation(cancellationToken))
-                yield return tick;
+            while (true)
+            {
+                bool hasNext;
+                try
+                {
+                    hasNext = await enumerator.MoveNextAsync();
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch
+                {
+                    // Provider error: stop iterating and return to caller without throwing
+                    break;
+                }
+
+                if (!hasNext) break;
+                yield return enumerator.Current;
+            }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        finally
         {
-            yield break;
-        }
-        catch (Exception)
-        {
-            // Provider-level errors (network, 4xx/5xx) are handled by the underlying provider
-            // but ensure they don't crash the routing loop. Downstream code will observe
-            // that no ticks arrive and log an appropriate warning.
-            yield break;
+            await enumerator.DisposeAsync();
         }
     }
 
