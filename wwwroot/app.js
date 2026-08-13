@@ -212,7 +212,7 @@ elements.form.addEventListener('submit', async event => {
   elements.message.className = 'form-message';
 
   try {
-    const response = await fetch('/api/symbols/add', {
+    const response = await fetch(apiUrl('/api/symbols/add'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol })
     });
     const body = await response.json().catch(() => ({}));
@@ -234,7 +234,7 @@ elements.grid.addEventListener('click', async event => {
   button.disabled = true;
   button.textContent = 'Removing…';
   try {
-    const response = await fetch('/api/symbols/remove', {
+    const response = await fetch(apiUrl('/api/symbols/remove'), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol: button.dataset.symbol })
     });
     if (!response.ok) throw new Error('Remove failed');
