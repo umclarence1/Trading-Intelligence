@@ -9,12 +9,17 @@ public sealed class RoutedMarketDataProvider : IMarketDataProvider
     private readonly BinanceMarketDataProvider _binance;
     private readonly TwelveDataMarketDataProvider _forex;
     private readonly CoinGeckoMarketDataProvider _coinGecko;
+    private readonly string _preferredCryptoProvider;
 
     public RoutedMarketDataProvider(BinanceMarketDataProvider binance, TwelveDataMarketDataProvider forex, CoinGeckoMarketDataProvider coinGecko)
     {
         _binance = binance;
         _forex = forex;
         _coinGecko = coinGecko;
+        // Allow an environment override to prefer CoinGecko when deployed to locations
+        // where Binance may be restricted (e.g., Render). Set PREFERRED_CRYPTO_PROVIDER=CoinGecko
+        // to force CoinGecko as the primary crypto provider.
+        _preferredCryptoProvider = Environment.GetEnvironmentVariable("PREFERRED_CRYPTO_PROVIDER") ?? string.Empty;
     }
 
     public string Name => "Automatic market routing";
@@ -28,7 +33,13 @@ public sealed class RoutedMarketDataProvider : IMarketDataProvider
         if (Select(symbol) == ProviderKind.Forex)
             return await _forex.GetCurrentPriceAsync(symbol, cancellationToken);
 
-        // crypto: try Binance first, then CoinGecko fallback
+        // Crypto: optionally prefer CoinGecko when environment requests it.
+        if (string.Equals(_preferredCryptoProvider, "CoinGecko", StringComparison.OrdinalIgnoreCase))
+        {
+            return await _coinGecko.GetCurrentPriceAsync(symbol, cancellationToken);
+        }
+
+        // Default: try Binance first, then CoinGecko fallback
         try
         {
             var val = await _binance.GetCurrentPriceAsync(symbol, cancellationToken);
@@ -91,6 +102,10 @@ public sealed class RoutedMarketDataProvider : IMarketDataProvider
 
     private IAsyncEnumerable<MarketTick> GetCryptoTicks(string symbol, TimeSpan interval, CancellationToken cancellationToken)
     {
+        // Allow preferring CoinGecko via env when Binance is restricted in the deployment region
+        if (string.Equals(_preferredCryptoProvider, "CoinGecko", StringComparison.OrdinalIgnoreCase))
+            return _coinGecko.GetTicksAsync(symbol, interval, cancellationToken);
+
         // Prefer Binance stream; if it fails, use CoinGecko stream
         var binanceStream = _binance.GetTicksAsync(symbol, interval, cancellationToken);
         return WrapFallbackStreams(binanceStream, _coinGecko.GetTicksAsync(symbol, interval, cancellationToken));
