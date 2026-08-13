@@ -118,10 +118,11 @@
   </div>
   <script src="app.js" defer></script>
   <script src="env.js"></script>
-  <script src="app.js" defer></script>
   <script>
-    // Fallback if env.js did not set the value.
-    window.__BACKEND_URL__ = window.__BACKEND_URL__ || "";
+    // If Vercel didn't write a BACKEND_URL, fallback to the Render service.
+    // Replace with your preferred backend if different.
+    window.__BACKEND_URL__ = window.__BACKEND_URL__ || "https://trading-intelligence-xax1.onrender.com";
   </script>
+  <script src="app.js" defer></script>
 </body>
 </html>
