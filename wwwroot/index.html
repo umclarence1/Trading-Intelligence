@@ -117,9 +117,10 @@
     </div>
   </div>
   <script src="app.js" defer></script>
+  <script src="env.js"></script>
+  <script src="app.js" defer></script>
   <script>
-    // Optional: set your deployed backend URL here (no trailing slash).
-    // Example: window.__BACKEND_URL__ = "https://tradinghub.yourdomain.com";
+    // Fallback if env.js did not set the value.
     window.__BACKEND_URL__ = window.__BACKEND_URL__ || "";
   </script>
 </body>
