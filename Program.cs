@@ -40,16 +40,15 @@ builder.Services.AddHttpClient<CoinGeckoMarketDataProvider>(client =>
 builder.Services.AddSingleton<IMarketDataProvider, RoutedMarketDataProvider>();
 builder.Services.AddSingleton<ITradingAdvisoryService, TradingAdvisoryService>();
 builder.Services.AddSingleton<IIndicatorEngine, IndicatorEngine>();
-// CORS: allow requests from the Vercel frontend and localhost during development
+// CORS: allow requests from Vercel frontend and localhost during development.
+// Use permissive policy for now to avoid 3rd-party Vercel host variants blocking requests.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowVercelAndLocal", policy =>
-        policy.WithOrigins(
-                "https://trading-intelligence-ab2g8sleh-clarences-projects-be342cdb.vercel.app",
-                "http://localhost:5000")
+        policy
+            .AllowAnyOrigin()
             .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials());
+            .AllowAnyMethod());
 });
 
 var app = builder.Build();
