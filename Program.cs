@@ -75,6 +75,22 @@ app.MapGet("/api/history", (ITradingAdvisoryService service) =>
 app.MapGet("/api/symbols", (ITradingAdvisoryService service) =>
     Results.Ok(service.Advisories.Select(a => a.Symbol)));
 
+app.MapGet("/api/diagnostics", (ITradingAdvisoryService service) =>
+{
+    // Include per-symbol status, last error (if any), and price history length
+    var diagnostics = service.Advisories.Select(a => new
+    {
+        symbol = a.Symbol,
+        provider = a.Provider,
+        status = a.Status.ToString(),
+        statusMessage = a.StatusMessage,
+        priceHistory = service.GetPriceHistory(a.Symbol).Count,
+        lastError = (service as TradingAutomationHub.Services.TradingAdvisoryService)?.LastErrors.TryGetValue(a.Symbol, out var v) == true ? (service as TradingAutomationHub.Services.TradingAdvisoryService)?.LastErrors[a.Symbol] : null
+    });
+
+    return Results.Ok(diagnostics);
+});
+
 app.MapGet("/api/prices", (ITradingAdvisoryService service, string symbol) =>
     string.IsNullOrWhiteSpace(symbol)
         ? Results.BadRequest(new { error = "A symbol is required." })

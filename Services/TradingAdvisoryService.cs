@@ -30,6 +30,7 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
     private readonly ConcurrentDictionary<string, SymbolAdvisory> _advisories = new();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _symbolTokens = new();
     private readonly ConcurrentDictionary<string, Queue<decimal>> _priceHistory = new();
+        private readonly ConcurrentDictionary<string, string?> _lastErrors = new();
     private readonly List<SignalRecord> _history = new();
     private readonly object _historyLock = new();
     private CancellationToken _applicationStopping;
@@ -58,6 +59,9 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
             lock (_historyLock) return _history.ToArray();
         }
     }
+
+    // Diagnostics for external inspection
+    public IReadOnlyDictionary<string, string?> LastErrors => _lastErrors;
 
     public void Start(IEnumerable<string> symbols, CancellationToken applicationStopping = default)
     {
@@ -139,6 +143,7 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
             catch (MarketDataException exception)
             {
                 _logger.LogWarning(exception, "Market data unavailable for {Symbol}", symbol);
+                _lastErrors[symbol] = exception.Message;
                 if (_advisories.TryGetValue(symbol, out var current))
                 {
                     _advisories[symbol] = current with
@@ -153,6 +158,7 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
             catch (Exception exception)
             {
                 _logger.LogError(exception, "Unexpected polling failure for {Symbol}", symbol);
+                _lastErrors[symbol] = exception.Message;
                 await Task.Delay(retryDelay, cancellationToken);
             }
         }
