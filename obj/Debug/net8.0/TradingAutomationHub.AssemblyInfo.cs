@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TradingAutomationHub")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+55e0b0fe601814a140aa849a10bfefa8e00584b1")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8cb0fef1d63ecb3b2a3b05a14b3cb894923c7da6")]
 [assembly: System.Reflection.AssemblyProductAttribute("TradingAutomationHub")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TradingAutomationHub")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

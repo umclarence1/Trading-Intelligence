@@ -32,6 +32,11 @@ builder.Services.AddHttpClient<TwelveDataMarketDataProvider>(client =>
     client.BaseAddress = new Uri("https://api.twelvedata.com");
     client.Timeout = TimeSpan.FromSeconds(15);
 });
+builder.Services.AddHttpClient<CoinGeckoMarketDataProvider>(client =>
+{
+    client.BaseAddress = new Uri("https://api.coingecko.com/api/v3");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 builder.Services.AddSingleton<IMarketDataProvider, RoutedMarketDataProvider>();
 builder.Services.AddSingleton<ITradingAdvisoryService, TradingAdvisoryService>();
 builder.Services.AddSingleton<IIndicatorEngine, IndicatorEngine>();

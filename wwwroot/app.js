@@ -161,9 +161,17 @@ function renderPerformance(history) {
   });
 }
 
+const backendBase = (window.__BACKEND_URL__ && window.__BACKEND_URL__.trim()) || '';
+
+function apiUrl(path) {
+  if (!backendBase) return path;
+  // ensure no double slashes
+  return backendBase.replace(/\/+$/,'') + '/' + path.replace(/^\/+/, '');
+}
+
 async function fetchHistory() {
   try {
-    const response = await fetch('/api/history');
+    const response = await fetch(apiUrl('/api/history'));
     if (!response.ok) throw new Error('History request failed');
     renderHistory(await response.json());
   } catch {
@@ -172,8 +180,16 @@ async function fetchHistory() {
 }
 
 function connectWebSocket() {
-  const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
-  const socket = new WebSocket(`${scheme}://${location.host}/ws/advisories`);
+  let wsUrl;
+  if (backendBase) {
+    const url = new URL(backendBase);
+    const scheme = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    wsUrl = `${scheme}//${url.host}${url.pathname.replace(/\/+$/,'')}/ws/advisories`;
+  } else {
+    const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+    wsUrl = `${scheme}://${location.host}/ws/advisories`;
+  }
+  const socket = new WebSocket(wsUrl);
   setConnection('Connecting', 'connecting');
   socket.addEventListener('open', () => setConnection('Live connection', 'live'));
   socket.addEventListener('message', event => {
