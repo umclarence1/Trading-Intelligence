@@ -30,10 +30,18 @@ public sealed class BinanceMarketDataProvider : IMarketDataProvider
                 $"/api/v3/ticker/price?symbol={Uri.EscapeDataString(symbol)}",
                 cancellationToken);
 
-            if (response.StatusCode == HttpStatusCode.BadRequest)
-                return null;
+            if (!response.IsSuccessStatusCode)
+            {
+                // Read response body for diagnostics (best-effort)
+                string body = string.Empty;
+                try { body = await response.Content.ReadAsStringAsync(cancellationToken); } catch { }
+                _logger.LogWarning("Binance returned non-success {Status} for {Symbol}: {Body}", (int)response.StatusCode, symbol, body);
 
-            response.EnsureSuccessStatusCode();
+                if (response.StatusCode == HttpStatusCode.BadRequest)
+                    return null;
+
+                response.EnsureSuccessStatusCode();
+            }
             var ticker = await response.Content.ReadFromJsonAsync<BinanceTickerResponse>(cancellationToken);
 
             if (ticker is null || !decimal.TryParse(
