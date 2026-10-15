@@ -96,16 +96,10 @@ public sealed class CoinGeckoMarketDataProvider : IMarketDataProvider
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            decimal? price = null;
-            try
-            {
-                price = await GetCurrentPriceAsync(symbol, cancellationToken);
-            }
-            catch
-            {
-                // swallow and continue
-            }
-
+            // Let failures propagate instead of swallowing them: a silent swallow here left
+            // the advisory stuck on "Waiting" forever with no recorded error when CoinGecko
+            // failed, since nothing ever threw for the caller to catch and log.
+            var price = await GetCurrentPriceAsync(symbol, cancellationToken);
             if (price.HasValue)
                 yield return new MarketTick(symbol, DateTime.UtcNow, price.Value);
 

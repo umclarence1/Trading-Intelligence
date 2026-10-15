@@ -11,7 +11,7 @@ using TradingAutomationHub.Enums;
 using TradingAutomationHub.Indicators;
 using TradingAutomationHub.Trading;
 
-var initialSymbols = new[] { "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "ADAUSDT" };
+var initialSymbols = new[] { "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "ADAUSDT", "XAUUSD" };
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddUserSecrets<Program>(optional: true);

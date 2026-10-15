@@ -81,10 +81,12 @@ public sealed class RoutedMarketDataProvider : IMarketDataProvider
                 {
                     break;
                 }
-                catch
+                catch (Exception exception)
                 {
-                    // Provider error: stop iterating and return to caller without throwing
-                    break;
+                    // Surface provider failures instead of silently ending the stream:
+                    // swallowing here left advisories stuck on "Waiting" forever with no
+                    // recorded error when every provider failed.
+                    throw new MarketDataException($"Market-data stream failed for {symbol}.", exception);
                 }
 
                 if (!hasNext) break;
@@ -152,9 +154,10 @@ public sealed class RoutedMarketDataProvider : IMarketDataProvider
                 {
                     break;
                 }
-                catch
+                catch (Exception exception)
                 {
-                    break;
+                    // Both primary and fallback failed: surface it instead of ending silently.
+                    throw new MarketDataException("Both the primary and fallback market-data streams failed.", exception);
                 }
 
                 if (!hasNext) break;
