@@ -201,7 +201,20 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
         if (!_advisories.TryGetValue(symbol, out var previousAdvisory))
             previousAdvisory = WaitingAdvisory(symbol);
 
-        var signal = evaluation.Direction switch
+        var isDirectional = evaluation.Direction is SignalDirection.Buy or SignalDirection.StrongBuy or SignalDirection.Sell or SignalDirection.StrongSell;
+        var direction = evaluation.Direction;
+        var reasons = evaluation.Reasons;
+
+        // Kill switch: this strategy has not been validated against an out-of-sample
+        // backtest, so an unproven directional call is never shown as actionable.
+        if (isDirectional && !_settings.PublishUnvalidatedSignals)
+        {
+            reasons = reasons.Append("Kill switch active: this strategy has not been validated against an out-of-sample backtest.").ToArray();
+            direction = SignalDirection.Hold;
+            isDirectional = false;
+        }
+
+        var signal = direction switch
         {
             SignalDirection.StrongBuy => TradeSignal.Buy,
             SignalDirection.Buy => TradeSignal.Buy,
@@ -210,19 +223,19 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
             _ => TradeSignal.Hold
         };
 
-        var riskPlan = evaluation.Direction is SignalDirection.Buy or SignalDirection.StrongBuy or SignalDirection.Sell or SignalDirection.StrongSell
-            ? _riskManagement.BuildRiskPlan(evaluation.ClosePrice, evaluation.Atr14 ?? 0m, evaluation.Direction)
+        var riskPlan = isDirectional
+            ? _riskManagement.BuildRiskPlan(evaluation.ClosePrice, evaluation.Atr14 ?? 0m, direction)
             : RiskPlan.Empty;
 
         var advisory = previousAdvisory with
         {
             Signal = signal,
-            Direction = evaluation.Direction,
+            Direction = direction,
             Confidence = evaluation.Confidence,
             TechnicalScore = evaluation.Score,
             TechnicalConfidence = evaluation.Confidence,
-            Reason = string.Join(" ", evaluation.Reasons),
-            Reasons = evaluation.Reasons,
+            Reason = string.Join(" ", reasons),
+            Reasons = reasons,
             Ema20 = evaluation.Ema20,
             Ema50 = evaluation.Ema50,
             Rsi14 = evaluation.Rsi14,

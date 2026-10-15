@@ -29,6 +29,11 @@ public sealed class TradingSettings
     public decimal TakeProfit1RiskMultiple { get; set; } = 1.0m;
     public decimal TakeProfit2RiskMultiple { get; set; } = 2.0m;
 
+    // Safety-first default: this strategy has not been validated against an
+    // out-of-sample backtest, so directional Buy/Sell advisories are suppressed
+    // to Hold until it is. Set true only once a strategy has proven an edge.
+    public bool PublishUnvalidatedSignals { get; set; } = false;
+
     public Dictionary<string, int> TimeframeWeights { get; set; } = new()
     {
         ["5m"] = 1,
