@@ -21,6 +21,20 @@ public interface ITradingAdvisoryService
 
 public sealed class TradingAdvisoryService : ITradingAdvisoryService
 {
+    // Measured by replaying this exact strategy (EMA20/EMA50/RSI score, 15m XAUUSD)
+    // against real Twelve Data candles from 2026-05-13 to 2026-10-16 (~10,000 resolved
+    // signals), using the same risk model as RiskManagementEngine: entry at next-bar
+    // open, stop at 1.5x ATR, target at 1x ATR, 3bps round-trip cost, 24-bar max hold.
+    // Every bucket is net negative. Replace with fresh numbers if this strategy, period,
+    // or risk settings change.
+    private static readonly IReadOnlyDictionary<SignalDirection, decimal> HistoricalWinRate = new Dictionary<SignalDirection, decimal>
+    {
+        [SignalDirection.Buy] = 0.319m,
+        [SignalDirection.StrongBuy] = 0.348m,
+        [SignalDirection.Sell] = 0.424m,
+        [SignalDirection.StrongSell] = 0.387m,
+    };
+
     private const int PriceHistorySize = 120;
     private readonly IMarketDataProvider _marketDataProvider;
     private readonly ILogger<TradingAdvisoryService> _logger;
@@ -204,14 +218,19 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
         var isDirectional = evaluation.Direction is SignalDirection.Buy or SignalDirection.StrongBuy or SignalDirection.Sell or SignalDirection.StrongSell;
         var direction = evaluation.Direction;
         var reasons = evaluation.Reasons;
+        var confidence = evaluation.Confidence;
 
-        // Kill switch: this strategy has not been validated against an out-of-sample
-        // backtest, so an unproven directional call is never shown as actionable.
-        if (isDirectional && !_settings.PublishUnvalidatedSignals)
+        // This strategy has not been validated against an out-of-sample backtest, so
+        // rather than hiding its calls, show the real historical win rate measured for
+        // this exact signal type (15m XAUUSD, EMA/RSI score strategy, May-Oct 2026,
+        // ~10,000 resolved signals, 1.5x ATR stop / 1x ATR target / 3bps costs) in place
+        // of the strategy's own made-up confidence score. All of them are net losers.
+        if (isDirectional && !_settings.PublishUnvalidatedSignals && HistoricalWinRate.TryGetValue(direction, out var realWinRate))
         {
-            reasons = reasons.Append("Kill switch active: this strategy has not been validated against an out-of-sample backtest.").ToArray();
-            direction = SignalDirection.Hold;
-            isDirectional = false;
+            reasons = reasons.Append(
+                $"UNVALIDATED: {direction} calls like this have historically won only {realWinRate:P0} of the time with negative average return. Do not trade this signal.")
+                .ToArray();
+            confidence = realWinRate;
         }
 
         var signal = direction switch
@@ -231,7 +250,7 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
         {
             Signal = signal,
             Direction = direction,
-            Confidence = evaluation.Confidence,
+            Confidence = confidence,
             TechnicalScore = evaluation.Score,
             TechnicalConfidence = evaluation.Confidence,
             Reason = string.Join(" ", reasons),

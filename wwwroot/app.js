@@ -65,7 +65,7 @@ function createAdvisoryCard(item) {
     <p class="price ${isLive ? '' : 'waiting'}"></p>
     <span class="price-label">Last price</span>
     <div class="chart-wrap"><canvas id="spark-${safeId(item.symbol)}"></canvas></div>
-    <div class="signal-row"><span class="signal-badge ${signalClass}"></span><span class="confidence"><strong></strong> confidence</span></div>
+    <div class="signal-row"><span class="signal-badge ${signalClass}"></span><span class="confidence"><strong></strong> historical win rate</span></div>
     <p class="reason"></p>
     <div class="risk-grid">
       <div><span>Entry</span><strong class="entry-price"></strong></div>
