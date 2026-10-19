@@ -313,7 +313,7 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
                 advisory.Signal,
                 advisory.Direction,
                 advisory.Reason,
-                advisory.TechnicalConfidence,
+                advisory.Confidence,
                 advisory.Time));
             if (_history.Count > 200) _history.RemoveAt(0);
         }
