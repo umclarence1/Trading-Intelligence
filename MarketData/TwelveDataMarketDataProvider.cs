@@ -32,7 +32,12 @@ public sealed class TwelveDataMarketDataProvider
             using var response = await _httpClient.SendAsync(request, cancellationToken);
             var payload = await response.Content.ReadFromJsonAsync<TwelveDataPriceResponse>(cancellationToken);
 
-            if (response.StatusCode == HttpStatusCode.BadRequest || payload?.Status == "error") return null;
+            // Only a genuinely unrecognized symbol should resolve to "no price" silently.
+            // Anything else with an error status (rate limit, quota exhausted, auth
+            // failure, outage) must throw so the caller surfaces it instead of retrying
+            // forever with no visible error.
+            if (response.StatusCode == HttpStatusCode.BadRequest) return null;
+            if (payload?.Status == "error") throw new MarketDataException(BuildProviderError(symbol, payload.Code, payload.Message));
             response.EnsureSuccessStatusCode();
             if (payload is null || !decimal.TryParse(payload.Price, NumberStyles.Float, CultureInfo.InvariantCulture, out var price))
                 throw new MarketDataException($"{Name} returned malformed price data for {symbol}.");
@@ -70,7 +75,8 @@ public sealed class TwelveDataMarketDataProvider
             using var request = CreateRequest($"/time_series?symbol={Uri.EscapeDataString(providerSymbol)}&interval={interval}&outputsize={limit}&timezone=UTC");
             using var response = await _httpClient.SendAsync(request, cancellationToken);
             var payload = await response.Content.ReadFromJsonAsync<TwelveDataSeriesResponse>(cancellationToken);
-            if (response.StatusCode == HttpStatusCode.BadRequest || payload?.Status == "error") return Array.Empty<Candle>();
+            if (response.StatusCode == HttpStatusCode.BadRequest) return Array.Empty<Candle>();
+            if (payload?.Status == "error") throw new MarketDataException(BuildProviderError(symbol, payload.Code, payload.Message));
             response.EnsureSuccessStatusCode();
             return (payload?.Values ?? [])
                 .Select(value => new Candle(
@@ -130,15 +136,27 @@ public sealed class TwelveDataMarketDataProvider
     private static decimal ParseDecimal(string value) => decimal.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture);
     private static decimal ParseOptionalDecimal(string? value) => decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0m;
 
+    private static string BuildProviderError(string symbol, int? code, string? message)
+    {
+        var detail = string.IsNullOrWhiteSpace(message) ? "The provider returned an error without details." : message.Trim();
+        return code.HasValue
+            ? $"Twelve Data error {code.Value} for {symbol}: {detail}"
+            : $"Twelve Data error for {symbol}: {detail}";
+    }
+
     private sealed class TwelveDataPriceResponse
     {
         public string? Price { get; set; }
         public string? Status { get; set; }
+        public int? Code { get; set; }
+        public string? Message { get; set; }
     }
 
     private sealed class TwelveDataSeriesResponse
     {
         public string? Status { get; set; }
+        public int? Code { get; set; }
+        public string? Message { get; set; }
         public List<TwelveDataValue> Values { get; set; } = [];
     }
 
