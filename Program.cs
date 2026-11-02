@@ -20,8 +20,14 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.Configure<TwelveDataSettings>(builder.Configuration.GetSection(TwelveDataSettings.SectionName));
 builder.Services.Configure<TradingSettings>(builder.Configuration.GetSection(TradingSettings.SectionName));
+builder.Services.Configure<TelegramSettings>(builder.Configuration.GetSection(TelegramSettings.SectionName));
 builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<TradingSettings>>().Value);
 builder.Services.AddSingleton<RiskManagementEngine>();
+builder.Services.AddHttpClient<TelegramNotifier>(client =>
+{
+    client.BaseAddress = new Uri("https://api.telegram.org");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 builder.Services.AddHttpClient<BinanceMarketDataProvider>(client =>
 {
     client.BaseAddress = new Uri("https://api.binance.com");

@@ -49,18 +49,22 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
     private readonly object _historyLock = new();
     private CancellationToken _applicationStopping;
 
+    private readonly TelegramNotifier _telegramNotifier;
+
     public TradingAdvisoryService(
         IMarketDataProvider marketDataProvider,
         ILogger<TradingAdvisoryService> logger,
         IIndicatorEngine indicatorEngine,
         RiskManagementEngine riskManagement,
-        TradingSettings settings)
+        TradingSettings settings,
+        TelegramNotifier telegramNotifier)
     {
         _marketDataProvider = marketDataProvider;
         _logger = logger;
         _indicatorEngine = indicatorEngine;
         _riskManagement = riskManagement;
         _settings = settings;
+        _telegramNotifier = telegramNotifier;
     }
 
     public IReadOnlyList<SymbolAdvisory> Advisories =>
@@ -317,6 +321,23 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
                 advisory.Time));
             if (_history.Count > 200) _history.RemoveAt(0);
         }
+
+        if (advisory.Signal != TradeSignal.Hold)
+            _ = _telegramNotifier.SendAsync(FormatTelegramMessage(advisory));
+    }
+
+    private static string FormatTelegramMessage(SymbolAdvisory advisory)
+    {
+        var emoji = advisory.Signal == TradeSignal.Buy ? "\U0001F7E2" : "\U0001F534"; // green/red circle
+        var lines = new List<string>
+        {
+            $"{emoji} <b>{advisory.Signal.ToString().ToUpperInvariant()} {advisory.Symbol}</b> at {advisory.Price:F2}",
+            $"Historical win rate: {advisory.Confidence:P0}",
+        };
+        if (advisory.EntryPrice is not null)
+            lines.Add($"Entry {advisory.EntryPrice:F2} | SL {advisory.StopLoss:F2} | TP1 {advisory.TakeProfit1:F2} | TP2 {advisory.TakeProfit2:F2}");
+        lines.Add(advisory.Reason);
+        return string.Join("\n", lines);
     }
 
     private SymbolAdvisory WaitingAdvisory(string symbol) => new(
