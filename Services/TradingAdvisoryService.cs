@@ -130,7 +130,9 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
     private async Task RunSymbolAsync(string symbol, CancellationToken cancellationToken)
     {
         var engine = new TradingEngine(_indicatorEngine, _riskManagement, _settings);
-        var retryDelay = TimeSpan.FromSeconds(3);
+        var baseRetryDelay = TimeSpan.FromSeconds(3);
+        var maxRetryDelay = TimeSpan.FromMinutes(5);
+        var consecutiveFailures = 0;
         TimeSpan timeframeDuration = _settings.PrimaryTimeframeEnum.Duration();
         DateTime? lastEvaluatedClose = null;
 
@@ -143,6 +145,7 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
                     TimeSpan.FromSeconds(1),
                     cancellationToken))
                 {
+                    consecutiveFailures = 0;
                     AddPrice(tick.Symbol, tick.Price);
                     UpdateLivePrice(tick);
 
@@ -171,13 +174,25 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
                         Time = DateTime.UtcNow
                     };
                 }
-                await Task.Delay(retryDelay, cancellationToken);
+                // Exponential backoff, capped at 5 minutes: a sustained failure (e.g. a
+                // provider's daily quota being exhausted) must not retry every few
+                // seconds, since each retry still consumes quota and only deepens and
+                // prolongs the outage. A transient blip still recovers quickly.
+                consecutiveFailures++;
+                var delay = TimeSpan.FromMilliseconds(Math.Min(
+                    baseRetryDelay.TotalMilliseconds * Math.Pow(2, consecutiveFailures - 1),
+                    maxRetryDelay.TotalMilliseconds));
+                await Task.Delay(delay, cancellationToken);
             }
             catch (Exception exception)
             {
                 _logger.LogError(exception, "Unexpected polling failure for {Symbol}", symbol);
                 _lastErrors[symbol] = exception.Message;
-                await Task.Delay(retryDelay, cancellationToken);
+                consecutiveFailures++;
+                var delay = TimeSpan.FromMilliseconds(Math.Min(
+                    baseRetryDelay.TotalMilliseconds * Math.Pow(2, consecutiveFailures - 1),
+                    maxRetryDelay.TotalMilliseconds));
+                await Task.Delay(delay, cancellationToken);
             }
         }
     }
