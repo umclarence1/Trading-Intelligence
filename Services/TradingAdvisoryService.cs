@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using TradingAutomationHub.Indicators;
 using TradingAutomationHub.Enums;
 using TradingAutomationHub.MarketData;
@@ -13,6 +14,7 @@ public interface ITradingAdvisoryService
 {
     IReadOnlyList<SymbolAdvisory> Advisories { get; }
     IReadOnlyList<SignalRecord> SignalHistory { get; }
+    IReadOnlyList<TrackedSignal> TrackedSignals { get; }
     void Start(IEnumerable<string> symbols, CancellationToken applicationStopping = default);
     bool AddSymbol(string symbol);
     bool RemoveSymbol(string symbol);
@@ -21,21 +23,34 @@ public interface ITradingAdvisoryService
 
 public sealed class TradingAdvisoryService : ITradingAdvisoryService
 {
-    // Measured by replaying this exact strategy (EMA20/EMA50/RSI score, 15m XAUUSD)
-    // against real Twelve Data candles from 2026-05-13 to 2026-10-16 (~10,000 resolved
-    // signals), using the same risk model as RiskManagementEngine: entry at next-bar
-    // open, stop at 1.5x ATR, target at 1x ATR, 3bps round-trip cost, 24-bar max hold.
-    // Every bucket is net negative. Replace with fresh numbers if this strategy, period,
-    // or risk settings change.
-    private static readonly IReadOnlyDictionary<SignalDirection, decimal> HistoricalWinRate = new Dictionary<SignalDirection, decimal>
+    // Starting point measured by replaying this exact strategy (EMA20/EMA50/RSI score,
+    // 15m XAUUSD) against real Twelve Data candles from 2026-05-13 to 2026-10-16
+    // (~10,000 resolved signals), using the same risk model as RiskManagementEngine:
+    // entry at next-bar open, stop at 1.5x ATR, target at 1x ATR, 3bps round-trip cost,
+    // 24-bar max hold. Every bucket started net negative. From here, every real signal
+    // this service tracks live gets resolved (win/loss/expired) and blended into these
+    // counts, so the win rate shown keeps updating from real forward results instead of
+    // staying frozen at this one-time backtest forever.
+    private static readonly IReadOnlyDictionary<SignalDirection, (int Wins, int Losses)> SeedWinRate = new Dictionary<SignalDirection, (int, int)>
     {
-        [SignalDirection.Buy] = 0.319m,
-        [SignalDirection.StrongBuy] = 0.348m,
-        [SignalDirection.Sell] = 0.424m,
-        [SignalDirection.StrongSell] = 0.387m,
+        [SignalDirection.Buy] = (380, 813),
+        [SignalDirection.StrongBuy] = (1067, 2003),
+        [SignalDirection.Sell] = (502, 681),
+        [SignalDirection.StrongSell] = (1333, 2108),
     };
 
+    private sealed class DirectionStats
+    {
+        public int Wins;
+        public int Losses;
+        public decimal WinRate => (Wins + Losses) == 0 ? 0m : (decimal)Wins / (Wins + Losses);
+    }
+
+    private readonly ConcurrentDictionary<SignalDirection, DirectionStats> _winRateStats = new(
+        SeedWinRate.ToDictionary(kv => kv.Key, kv => new DirectionStats { Wins = kv.Value.Wins, Losses = kv.Value.Losses }));
+
     private const int PriceHistorySize = 120;
+    private const int TrackedSignalHistorySize = 300;
     private readonly IMarketDataProvider _marketDataProvider;
     private readonly ILogger<TradingAdvisoryService> _logger;
     private readonly IIndicatorEngine _indicatorEngine;
@@ -50,6 +65,9 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
     private CancellationToken _applicationStopping;
 
     private readonly TelegramNotifier _telegramNotifier;
+    private readonly List<TrackedSignal> _trackedSignals = new();
+    private readonly object _trackingLock = new();
+    private readonly string? _trackingStoragePath;
 
     public TradingAdvisoryService(
         IMarketDataProvider marketDataProvider,
@@ -57,7 +75,8 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
         IIndicatorEngine indicatorEngine,
         RiskManagementEngine riskManagement,
         TradingSettings settings,
-        TelegramNotifier telegramNotifier)
+        TelegramNotifier telegramNotifier,
+        IWebHostEnvironment environment)
     {
         _marketDataProvider = marketDataProvider;
         _logger = logger;
@@ -65,6 +84,8 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
         _riskManagement = riskManagement;
         _settings = settings;
         _telegramNotifier = telegramNotifier;
+        _trackingStoragePath = Path.Combine(environment.ContentRootPath, "App_Data", "signal-outcomes.json");
+        LoadTrackedSignals();
     }
 
     public IReadOnlyList<SymbolAdvisory> Advisories =>
@@ -75,6 +96,14 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
         get
         {
             lock (_historyLock) return _history.ToArray();
+        }
+    }
+
+    public IReadOnlyList<TrackedSignal> TrackedSignals
+    {
+        get
+        {
+            lock (_trackingLock) return _trackedSignals.ToArray();
         }
     }
 
@@ -221,7 +250,110 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
         };
 
         _advisories[tick.Symbol] = updated;
+        ResolveTrackedSignals(tick);
     }
+
+    private void ResolveTrackedSignals(MarketTick tick)
+    {
+        List<TrackedSignal>? resolved = null;
+        lock (_trackingLock)
+        {
+            for (var i = 0; i < _trackedSignals.Count; i++)
+            {
+                var tracked = _trackedSignals[i];
+                if (tracked.Symbol != tick.Symbol || tracked.Outcome != SignalOutcome.Open) continue;
+
+                var isBuy = tracked.Direction is SignalDirection.Buy or SignalDirection.StrongBuy;
+                var stopHit = isBuy ? tick.Price <= tracked.StopLoss : tick.Price >= tracked.StopLoss;
+                var targetHit = isBuy ? tick.Price >= tracked.Target : tick.Price <= tracked.Target;
+                var expired = !stopHit && !targetHit && tick.Time >= tracked.ExpiresAt;
+                if (!stopHit && !targetHit && !expired) continue;
+
+                var outcome = stopHit ? SignalOutcome.Loss : targetHit ? SignalOutcome.Win : SignalOutcome.Expired;
+                var exitPrice = stopHit ? tracked.StopLoss : targetHit ? tracked.Target : tick.Price;
+                var risk = Math.Abs(tracked.Entry - tracked.StopLoss);
+                var resultR = risk <= 0m ? 0m : (isBuy ? exitPrice - tracked.Entry : tracked.Entry - exitPrice) / risk;
+
+                var closed = tracked with { Outcome = outcome, ResultR = decimal.Round(resultR, 4), ClosedAt = tick.Time };
+                _trackedSignals[i] = closed;
+                (resolved ??= new List<TrackedSignal>()).Add(closed);
+
+                if (outcome is SignalOutcome.Win or SignalOutcome.Loss)
+                {
+                    var stats = _winRateStats.GetOrAdd(tracked.Direction, _ => new DirectionStats());
+                    if (outcome == SignalOutcome.Win) Interlocked.Increment(ref stats.Wins);
+                    else Interlocked.Increment(ref stats.Losses);
+                }
+            }
+        }
+
+        if (resolved is not null) PersistTrackedSignals();
+    }
+
+    private void RegisterTrackedSignal(string symbol, SignalDirection direction, RiskPlan riskPlan, DateTime openedAt, TimeSpan timeframeDuration)
+    {
+        if (riskPlan.Entry is null || riskPlan.StopLoss is null || riskPlan.TakeProfit1 is null) return;
+
+        lock (_trackingLock)
+        {
+            var alreadyTracked = _trackedSignals.Any(t => t.Symbol == symbol && t.Direction == direction && t.OpenedAt == openedAt);
+            if (alreadyTracked) return;
+
+            _trackedSignals.Add(new TrackedSignal(
+                Guid.NewGuid(), symbol, direction, riskPlan.Entry.Value, riskPlan.StopLoss.Value, riskPlan.TakeProfit1.Value,
+                openedAt, openedAt + TimeSpan.FromTicks(timeframeDuration.Ticks * Math.Max(1, _settings.SignalTrackingHoldingBars)),
+                SignalOutcome.Open, null, null));
+            while (_trackedSignals.Count > TrackedSignalHistorySize) _trackedSignals.RemoveAt(0);
+        }
+        PersistTrackedSignals();
+    }
+
+    private void PersistTrackedSignals()
+    {
+        if (_trackingStoragePath is null) return;
+        try
+        {
+            List<TrackedSignal> snapshot;
+            Dictionary<SignalDirection, DirectionStats> statsSnapshot;
+            lock (_trackingLock) snapshot = _trackedSignals.ToList();
+            statsSnapshot = _winRateStats.ToDictionary(kv => kv.Key, kv => kv.Value);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(_trackingStoragePath)!);
+            var payload = new PersistedTracking(snapshot, statsSnapshot.ToDictionary(kv => kv.Key, kv => new DirectionStatSnapshot(kv.Value.Wins, kv.Value.Losses)));
+            var temporaryPath = _trackingStoragePath + ".tmp";
+            File.WriteAllText(temporaryPath, JsonSerializer.Serialize(payload));
+            File.Move(temporaryPath, _trackingStoragePath, true);
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Unable to persist tracked signal outcomes.");
+        }
+    }
+
+    private void LoadTrackedSignals()
+    {
+        if (_trackingStoragePath is null || !File.Exists(_trackingStoragePath)) return;
+        try
+        {
+            var payload = JsonSerializer.Deserialize<PersistedTracking>(File.ReadAllText(_trackingStoragePath));
+            if (payload is null) return;
+
+            lock (_trackingLock)
+            {
+                _trackedSignals.Clear();
+                _trackedSignals.AddRange(payload.Signals.TakeLast(TrackedSignalHistorySize));
+            }
+            foreach (var (direction, counts) in payload.Stats)
+                _winRateStats[direction] = new DirectionStats { Wins = counts.Wins, Losses = counts.Losses };
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(exception, "Unable to load persisted signal outcomes.");
+        }
+    }
+
+    private sealed record DirectionStatSnapshot(int Wins, int Losses);
+    private sealed record PersistedTracking(List<TrackedSignal> Signals, Dictionary<SignalDirection, DirectionStatSnapshot> Stats);
 
     private async Task EvaluateAdvisoryForClosedCandle(string symbol, DateTime now, CancellationToken cancellationToken, TradingEngine engine)
     {
@@ -240,14 +372,16 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
         var confidence = evaluation.Confidence;
 
         // This strategy has not been validated against an out-of-sample backtest, so
-        // rather than hiding its calls, show the real historical win rate measured for
-        // this exact signal type (15m XAUUSD, EMA/RSI score strategy, May-Oct 2026,
-        // ~10,000 resolved signals, 1.5x ATR stop / 1x ATR target / 3bps costs) in place
-        // of the strategy's own made-up confidence score. All of them are net losers.
-        if (isDirectional && !_settings.PublishUnvalidatedSignals && HistoricalWinRate.TryGetValue(direction, out var realWinRate))
+        // rather than hiding its calls, show the real win rate measured for this exact
+        // signal type — seeded from a one-time backtest, then continuously updated from
+        // every live signal this service has tracked to a resolved outcome since, so
+        // the number keeps reflecting real, ongoing performance instead of staying
+        // frozen. All buckets started net negative.
+        if (isDirectional && !_settings.PublishUnvalidatedSignals && _winRateStats.TryGetValue(direction, out var stats))
         {
+            var realWinRate = stats.WinRate;
             reasons = reasons.Append(
-                $"UNVALIDATED: {direction} calls like this have historically won only {realWinRate:P0} of the time with negative average return. Do not trade this signal.")
+                $"UNVALIDATED: {direction} calls like this have won {realWinRate:P0} of the time across {stats.Wins + stats.Losses:N0} resolved signals. Do not trade this signal.")
                 .ToArray();
             confidence = realWinRate;
         }
@@ -264,6 +398,9 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
         var riskPlan = isDirectional
             ? _riskManagement.BuildRiskPlan(evaluation.ClosePrice, evaluation.Atr14 ?? 0m, direction)
             : RiskPlan.Empty;
+
+        if (isDirectional)
+            RegisterTrackedSignal(symbol, direction, riskPlan, closedCandleTime, timeframe.Duration());
 
         var advisory = previousAdvisory with
         {

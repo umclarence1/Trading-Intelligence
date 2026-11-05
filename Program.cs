@@ -81,6 +81,46 @@ app.MapGet("/api/history", (ITradingAdvisoryService service) =>
 app.MapGet("/api/symbols", (ITradingAdvisoryService service) =>
     Results.Ok(service.Advisories.Select(a => a.Symbol)));
 
+app.MapGet("/api/signal-performance", (ITradingAdvisoryService service) =>
+{
+    var tracked = service.TrackedSignals;
+    var byDirection = tracked
+        .Where(t => t.Outcome is SignalOutcome.Win or SignalOutcome.Loss)
+        .GroupBy(t => t.Direction)
+        .Select(g => new
+        {
+            direction = g.Key.ToString(),
+            resolved = g.Count(),
+            wins = g.Count(t => t.Outcome == SignalOutcome.Win),
+            losses = g.Count(t => t.Outcome == SignalOutcome.Loss),
+            winRate = g.Count() == 0 ? 0m : decimal.Round((decimal)g.Count(t => t.Outcome == SignalOutcome.Win) / g.Count(), 4),
+            averageR = g.Count() == 0 ? 0m : decimal.Round(g.Average(t => t.ResultR ?? 0m), 4)
+        });
+
+    return Results.Ok(new
+    {
+        open = tracked.Count(t => t.Outcome == SignalOutcome.Open),
+        resolved = tracked.Count(t => t.Outcome != SignalOutcome.Open),
+        byDirection,
+        recent = tracked
+            .Where(t => t.Outcome != SignalOutcome.Open)
+            .OrderByDescending(t => t.ClosedAt)
+            .Take(50)
+            .Select(t => new
+            {
+                symbol = t.Symbol,
+                direction = t.Direction.ToString(),
+                outcome = t.Outcome.ToString(),
+                entry = t.Entry,
+                stopLoss = t.StopLoss,
+                target = t.Target,
+                resultR = t.ResultR,
+                openedAt = t.OpenedAt,
+                closedAt = t.ClosedAt
+            })
+    });
+});
+
 app.MapGet("/api/diagnostics", (ITradingAdvisoryService service) =>
 {
     // Include per-symbol status, last error (if any), and price history length

@@ -56,3 +56,18 @@ public sealed record SignalRecord(
     DateTime Time);
 
 public sealed record TradeAction(TradeSignal Signal, decimal Price, DateTime Time, string Description);
+
+public enum SignalOutcome { Open, Win, Loss, Expired }
+
+public sealed record TrackedSignal(
+    Guid Id,
+    string Symbol,
+    SignalDirection Direction,
+    decimal Entry,
+    decimal StopLoss,
+    decimal Target,
+    DateTime OpenedAt,
+    DateTime ExpiresAt,
+    SignalOutcome Outcome,
+    decimal? ResultR,
+    DateTime? ClosedAt);

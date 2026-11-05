@@ -34,6 +34,11 @@ public sealed class TradingSettings
     // to Hold until it is. Set true only once a strategy has proven an edge.
     public bool PublishUnvalidatedSignals { get; set; } = false;
 
+    // How many closed candles a tracked signal is allowed to run before it's
+    // marked Expired (and marked to market) if neither the stop nor the target
+    // was hit. 24 bars on the default 15m timeframe is 6 hours.
+    public int SignalTrackingHoldingBars { get; set; } = 24;
+
     public Dictionary<string, int> TimeframeWeights { get; set; } = new()
     {
         ["5m"] = 1,
