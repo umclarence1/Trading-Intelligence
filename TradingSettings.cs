@@ -39,6 +39,16 @@ public sealed class TradingSettings
     // was hit. 24 bars on the default 15m timeframe is 6 hours.
     public int SignalTrackingHoldingBars { get; set; } = 24;
 
+    // A signal direction is only promoted out of "UNVALIDATED" automatically once
+    // its OWN live, resolved trades (not the seed backtest) clear every one of
+    // these bars at once. Deliberately matches the same thresholds used elsewhere
+    // for strategy validation, so promotion requires real, out-of-sample proof,
+    // not a lucky streak. It is re-checked after every resolution and can demote
+    // again if live performance later falls back below the bar.
+    public int MinimumValidationTrades { get; set; } = 100;
+    public decimal MinimumValidationProfitFactor { get; set; } = 1.25m;
+    public decimal MaximumValidationDrawdownR { get; set; } = 10m;
+
     public Dictionary<string, int> TimeframeWeights { get; set; } = new()
     {
         ["5m"] = 1,

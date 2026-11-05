@@ -81,7 +81,7 @@ app.MapGet("/api/history", (ITradingAdvisoryService service) =>
 app.MapGet("/api/symbols", (ITradingAdvisoryService service) =>
     Results.Ok(service.Advisories.Select(a => a.Symbol)));
 
-app.MapGet("/api/signal-performance", (ITradingAdvisoryService service) =>
+app.MapGet("/api/signal-performance", (ITradingAdvisoryService service, TradingSettings settings) =>
 {
     var tracked = service.TrackedSignals;
     var byDirection = tracked
@@ -97,11 +97,29 @@ app.MapGet("/api/signal-performance", (ITradingAdvisoryService service) =>
             averageR = g.Count() == 0 ? 0m : decimal.Round(g.Average(t => t.ResultR ?? 0m), 4)
         });
 
+    var validation = new[] { SignalDirection.Buy, SignalDirection.StrongBuy, SignalDirection.Sell, SignalDirection.StrongSell }
+        .Select(d =>
+        {
+            var v = service.GetValidationStatus(d);
+            return new
+            {
+                direction = d.ToString(),
+                isValidated = v.IsValidated,
+                liveTrades = v.Trades,
+                tradesNeeded = Math.Max(0, settings.MinimumValidationTrades - v.Trades),
+                profitFactor = v.ProfitFactor,
+                winRate = v.WinRate,
+                drawdownR = v.DrawdownR,
+                netR = v.NetR
+            };
+        });
+
     return Results.Ok(new
     {
         open = tracked.Count(t => t.Outcome == SignalOutcome.Open),
         resolved = tracked.Count(t => t.Outcome != SignalOutcome.Open),
         byDirection,
+        validation,
         recent = tracked
             .Where(t => t.Outcome != SignalOutcome.Open)
             .OrderByDescending(t => t.ClosedAt)

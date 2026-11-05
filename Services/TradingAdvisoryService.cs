@@ -10,6 +10,8 @@ using TradingAutomationHub.Trading;
 
 namespace TradingAutomationHub.Services;
 
+public sealed record LiveValidation(bool IsValidated, int Trades, decimal ProfitFactor, decimal WinRate, decimal DrawdownR, decimal NetR);
+
 public interface ITradingAdvisoryService
 {
     IReadOnlyList<SymbolAdvisory> Advisories { get; }
@@ -19,6 +21,7 @@ public interface ITradingAdvisoryService
     bool AddSymbol(string symbol);
     bool RemoveSymbol(string symbol);
     IReadOnlyList<decimal> GetPriceHistory(string symbol);
+    LiveValidation GetValidationStatus(SignalDirection direction);
 }
 
 public sealed class TradingAdvisoryService : ITradingAdvisoryService
@@ -290,6 +293,51 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
         if (resolved is not null) PersistTrackedSignals();
     }
 
+    // Evaluated fresh on every call from this direction's OWN live, resolved trades
+    // only — the seed backtest never counts toward promotion, so a direction can only
+    // become actionable by proving itself again, out-of-sample, in real time.
+    public LiveValidation GetValidationStatus(SignalDirection direction) => EvaluateLiveValidation(direction);
+
+    private LiveValidation EvaluateLiveValidation(SignalDirection direction)
+    {
+        List<TrackedSignal> resolved;
+        lock (_trackingLock)
+        {
+            resolved = _trackedSignals
+                .Where(t => t.Direction == direction && t.Outcome != SignalOutcome.Open)
+                .OrderBy(t => t.ClosedAt)
+                .ToList();
+        }
+
+        if (resolved.Count == 0) return new LiveValidation(false, 0, 0m, 0m, 0m, 0m);
+
+        var wins = resolved.Count(t => t.Outcome == SignalOutcome.Win);
+        var losses = resolved.Count(t => t.Outcome == SignalOutcome.Loss);
+        var decided = wins + losses;
+        var winRate = decided == 0 ? 0m : (decimal)wins / decided;
+
+        var rValues = resolved.Select(t => t.ResultR ?? 0m).ToList();
+        var grossWins = rValues.Where(r => r > 0m).Sum();
+        var grossLosses = Math.Abs(rValues.Where(r => r < 0m).Sum());
+        var profitFactor = grossLosses == 0m ? (grossWins > 0m ? 999m : 0m) : grossWins / grossLosses;
+        var netR = rValues.Sum();
+
+        decimal equity = 0m, peak = 0m, drawdown = 0m;
+        foreach (var r in rValues)
+        {
+            equity += r;
+            peak = Math.Max(peak, equity);
+            drawdown = Math.Max(drawdown, peak - equity);
+        }
+
+        var isValidated = resolved.Count >= _settings.MinimumValidationTrades
+            && profitFactor >= _settings.MinimumValidationProfitFactor
+            && drawdown <= _settings.MaximumValidationDrawdownR
+            && netR > 0m;
+
+        return new LiveValidation(isValidated, resolved.Count, decimal.Round(profitFactor, 3), decimal.Round(winRate, 4), decimal.Round(drawdown, 3), decimal.Round(netR, 3));
+    }
+
     private void RegisterTrackedSignal(string symbol, SignalDirection direction, RiskPlan riskPlan, DateTime openedAt, TimeSpan timeframeDuration)
     {
         if (riskPlan.Entry is null || riskPlan.StopLoss is null || riskPlan.TakeProfit1 is null) return;
@@ -377,11 +425,21 @@ public sealed class TradingAdvisoryService : ITradingAdvisoryService
         // every live signal this service has tracked to a resolved outcome since, so
         // the number keeps reflecting real, ongoing performance instead of staying
         // frozen. All buckets started net negative.
-        if (isDirectional && !_settings.PublishUnvalidatedSignals && _winRateStats.TryGetValue(direction, out var stats))
+        //
+        // A direction is only ever let through as actionable once its OWN live,
+        // resolved trades (not the seed) clear MinimumValidationTrades,
+        // MinimumValidationProfitFactor and MaximumValidationDrawdownR all at once —
+        // re-checked after every resolution, so it can be promoted or demoted purely
+        // by real forward evidence, never by a manual decision or a lucky streak.
+        if (isDirectional && _winRateStats.TryGetValue(direction, out var stats))
         {
+            var liveValidation = EvaluateLiveValidation(direction);
+            var isValidated = _settings.PublishUnvalidatedSignals || liveValidation.IsValidated;
             var realWinRate = stats.WinRate;
-            reasons = reasons.Append(
-                $"UNVALIDATED: {direction} calls like this have won {realWinRate:P0} of the time across {stats.Wins + stats.Losses:N0} resolved signals. Do not trade this signal.")
+
+            reasons = reasons.Append(isValidated
+                ? $"VALIDATED: {direction} calls have cleared the promotion bar over {liveValidation.Trades:N0} live trades (profit factor {liveValidation.ProfitFactor:F2}, win rate {liveValidation.WinRate:P0}). Trade with proper risk management, not blindly."
+                : $"UNVALIDATED: {direction} calls like this have won {realWinRate:P0} of the time across {stats.Wins + stats.Losses:N0} resolved signals ({liveValidation.Trades:N0} live so far, needs {_settings.MinimumValidationTrades:N0} at PF≥{_settings.MinimumValidationProfitFactor:F2} to validate). Do not trade this signal.")
                 .ToArray();
             confidence = realWinRate;
         }
