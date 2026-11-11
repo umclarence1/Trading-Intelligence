@@ -203,6 +203,20 @@ public sealed class TradingEngine
         var direction = DetermineDirection(score);
         var confidence = DetermineConfidence(score);
 
+        // Volatility filter: measured against real history, signals fired when ATR is
+        // below its own typical level lose roughly twice as much on average as the rest.
+        // This doesn't make the strategy profitable, only less bad, so it still shows
+        // through the usual UNVALIDATED gate afterward.
+        if (direction != SignalDirection.Hold)
+        {
+            var atrPercent = atr14.Value / lastClose * 100m;
+            if (atrPercent < _settings.MinimumAtrPercentForSignal)
+            {
+                reasons.Add($"Low-volatility filter: ATR is {atrPercent:F3}% of price, below the {_settings.MinimumAtrPercentForSignal:F3}% floor where this setup has historically lost about twice as much on average. Suppressed.");
+                direction = SignalDirection.Hold;
+            }
+        }
+
         return new SignalEvaluationResult(
             direction,
             score,
